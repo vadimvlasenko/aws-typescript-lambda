@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  aws-typescript-lambda
+
+  Sample SAM Template for aws-typescript-lambda
+
+Parameters:
+  Stage:
+    Type: String
+    Default: "dev"
+    Description: Stage (e.g. dev or prod)
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256
+    Runtime: nodejs14.x
+    Environment:
+      Variables:
+        ENV_1: !Sub ${AWS::StackName}-env1
+        ENV_2: !Sub ${Env2}
+
+Resources:
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'test-sponsors-api-${Stage}'
+      StageName: Prod
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      MinimumCompressionSize: 0
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: 'true'
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          title: !Sub "${AWS::StackName}"
+          version: 1.0
+        paths:
+          /sponsors:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SponsorsFunction.Arn}/invocations"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                type: "aws_proxy"
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateSponsorFunction.Arn}/invocations"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                type: "aws_proxy"
+        x-amazon-apigateway-request-validators:
+          ValidateBody:
+            validateRequestParameters: false
+            validateRequestBody: true
+
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+                - "edgelambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-lambda-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:Scan"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:BatchWriteItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DeleteItem"
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                  - "ec2:DeleteNetworkInterface"
+                  - "sqs:ReceiveMessage"
+                  - "sqs:SendMessage"
+                  - "sqs:DeleteMessage"
+                  - "sqs:GetQueueAttributes"
+                  - "sqs:GetQueueUrl"
+                  - "sqs:ChangeMessageVisibility"
+                  - "sqs:SetQueueAttributes"
+                Resource: "*"
+
+  SponsorsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-sponsors
+      Role: !GetAtt LambdaFunctionRole.Arn
+      CodeUri: target/
+      Handler: src/handler/sponsors.handler
+      Events:
+        MyApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /sponsors
+            Method: GET
+
+  SponsorsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn: [SponsorsFunction]
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SponsorsFunction}
+      RetentionInDays: 60
+
+  SponsorsFunctionLogErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref SponsorsFunctionLogGroup
+      FilterPattern: "{$._logLevel=error}"
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: !Sub /aws/${Stage}/${SponsorsFunction}
+          MetricName: "SponsorsFunctionLogErrorCount"
+
+  SponsorsFunctionLogErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda Log Errors Alarm
+      Namespace: !Sub /aws/${Stage}/${SponsorsFunction}
+      MetricName: SponsorsFunctionLogErrorCount
+      Statistic: Sum
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 10
+      Period: 60
+      EvaluationPeriods: 1
+      TreatMissingData: "notBreaching"
+      ActionsEnabled: True
+      AlarmActions:
+        - !Ref ErrorsTopic
+      OKActions:
+        - !Ref OkTopic
+
+  CreateSponsorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-create-sponsors
+      Role: !GetAtt LambdaFunctionRole.Arn
+      CodeUri: target/
+      Handler: src/handler/createSponsor.handler
+      Events:
+        MyApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MyApi
+            Path: /sponsors
+            Method: POST
+
+  CreateSponsorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn: [ CreateSponsorFunction ]
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CreateSponsorFunction}
+      RetentionInDays: 60
+
+  CreateSponsorFunctionLogErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CreateSponsorFunctionLogGroup
+      FilterPattern: "{$._logLevel=error}"
+      MetricTransformations:
+        - MetricValue: "1"
+          MetricNamespace: !Sub /aws/${Stage}/${CreateSponsorFunction}
+          MetricName: "CreateSponsorFunctionLogErrorCount"
+
+  CreateSponsorFunctionLogErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda Log Errors Alarm
+      Namespace: !Sub /aws/${Stage}/${CreateSponsorFunction}
+      MetricName: CreateSponsorFunctionLogErrorCount
+      Statistic: Sum
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 10
+      Period: 60
+      EvaluationPeriods: 1
+      TreatMissingData: "notBreaching"
+      ActionsEnabled: True
+      AlarmActions:
+        - !Ref ErrorsTopic
+      OKActions:
+        - !Ref OkTopic
+
+Outputs:
+  ApiId:
+    Description: the unique ID associated with the API Gateway
+    Value: !Ref MyApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiId"
+  ApiName:
+    Description: the name of the API Gateway
+    Value: !Ref "AWS::StackName"
+  SponsorsFunction:
+    Description: "Sponsors Lambda Function ARN"
+    Value: !GetAtt SponsorsFunction.Arn
+  CreateSponsorFunction:
+    Description: "Create sponsors Lambda Function ARN"
+    Value: !GetAtt CreateSponsorFunction.Arn

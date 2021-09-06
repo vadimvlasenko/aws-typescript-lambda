@@ -1,0 +1,36 @@
+{
+  "name": "aws-typescript-lambda",
+  "version": "1.0.0",
+  "description": "aws-typescript-lambda",
+  "engines": {
+    "node": ">=14.16.1"
+  },
+  "private": true,
+  "scripts": {
+    "build": "tsc --build",
+    "check:lint": "yarn eslint --ignore-path ../../.eslintignore '**/*{.ts, .tsx}'",
+    "deploy:dev": "yarn stage && sam deploy --config-env dev --no-fail-on-empty-changeset",
+    "deploy:prod": "yarn stage && sam deploy --config-env prod --no-fail-on-empty-changeset",
+    "invoke": "STAGE=dev yarn stage && sam local invoke -e event/event.json",
+    "start": "STAGE=dev yarn stage && sam local start-api",
+    "lint:fix": "yarn eslint --fix --ignore-path ../../.eslintignore '**/*{.ts, .tsx}'",
+    "stage": "cp package*.json target/ && cd target; yarn install --production",
+    "test": "AWS_PROFILE=fake-profile NODE_ENV=test jest --config jest.config.json",
+    "test:watch": "NODE_ENV=test jest --watch --config jest.config.json"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.11",
+    "@types/lambda-log": "^2.2.0",
+    "@types/aws-lambda": "^8.10.64",
+    "@types/node": "^14.17.5",
+    "@vercel/ncc": "^0.26.1",
+    "ts-node": "^10.2.1",
+    "typescript": "^4.3.5"
+  },
+  "dependencies": {
+    "aws-lambda": "^1.0.6",
+    "aws-sdk": "^2.773.0",
+    "lambda-log": "^2.0.0",
+    "decoders": "^1.17.0"
+  }
+}

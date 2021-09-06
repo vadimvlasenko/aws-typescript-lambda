@@ -1,0 +1,16 @@
+{
+  "testEnvironment": "node",
+  "testRegex": "(/__test__/.*|(\\.|/)test)\\.(ts)?$",
+  "testPathIgnorePatterns": ["/dist/.*"],
+  "moduleFileExtensions": ["ts", "js"],
+  "transform": {
+    "^.+\\.ts?$": "ts-jest"
+  },
+  "globals": {
+    "ts-jest": {
+      "diagnostics": {
+        "warnOnly": true
+      }
+    }
+  }
+}

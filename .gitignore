@@ -1,0 +1,5 @@
+target
+node_modules
+.aws-sam
+.idea
+packaged-template.yaml
