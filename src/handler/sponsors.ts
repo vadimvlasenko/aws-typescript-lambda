@@ -3,6 +3,7 @@ import { generateResponse, generateResponseForError } from '../utils/responseUti
 import log from 'lambda-log';
 import { SponsorService } from '../service/sponsorService';
 import { LambdaError } from "../types/index";
+import { deleteSponsor } from './deleteSponsor';
 
 const sponsorService: SponsorService = new SponsorService();
 
@@ -15,3 +16,5 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return generateResponseForError(err as LambdaError);
     }
 };
+
+export { deleteSponsor };
